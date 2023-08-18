@@ -535,20 +535,23 @@ const Home = () => {
     const user2 = buyer;
 
     let currentAmount = 0;
+    const pricePrecision = selectedSymbol?.["price-precision"];
+    const valuePrecision = selectedSymbol?.["value-precision"];
+    const minOrderValue = selectedSymbol?.["min-order-value"] || 10;
     try {
       for (let i = 0; i < count; i++) {
         console.log({ i })
         const maxAmount = Math.min(desiredAmount / count);
         const minAmount = Math.max(desiredAmount / (count + 1));
 
-        const amount1 = generateRandomPrice(minAmount, maxAmount);
+        const amount1 = generateRandomPrice(minAmount, maxAmount, pricePrecision);
         console.log({ amount1, minAmount, maxAmount })
-        if (amount1 < 10) {
+        if (amount1 < minOrderValue) {
           break;
         }
 
-        const price = generateRandomPrice(minPrice, maxPrice);
-        const volume1 = +(amount1 / price).toFixed(4);
+        const price = generateRandomPrice(minPrice, maxPrice, pricePrecision);
+        const volume1 = +(amount1 / price).toFixed(valuePrecision);
 
         currentAmount += amount1;
         if (currentAmount >= desiredAmount) {
@@ -599,7 +602,7 @@ const Home = () => {
         // ====================
 
         const amount2 = Math.min(accountBalanceUser2, maxAmount);
-        const volume2 = +(amount2 / price).toFixed(4);
+        const volume2 = +(amount2 / price).toFixed(valuePrecision);
         console.log({ volume2, accountBalanceUser2, maxAmount });
   
         [ accountBalanceUser1, accountBalanceUser2 ]  = await Promise.all([
