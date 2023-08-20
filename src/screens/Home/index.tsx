@@ -8,7 +8,7 @@ import variables from "../../api/variable";
 import { inflate } from "pako";
 import { toast } from "react-toastify";
 import allSymbolData from "../../utils/allSymbol";
-import { delay, floored_val, separatedArray, generateRandomPrice } from "../../utils/helper";
+import { delay, floored_val, separatedArray, generateRandomPrice, generateRandomArrayFromData } from "../../utils/helper";
 
 let ws: any;
 let preSymbol: any = null;
@@ -534,47 +534,51 @@ const Home = () => {
     const user1 = seller;
     const user2 = buyer;
 
-    let currentAmount = 0;
     const pricePrecision = selectedSymbol?.["price-precision"];
     const valuePrecision = selectedSymbol?.["value-precision"];
     const volumePrecision = selectedSymbol?.["amount-precision"];
     const minOrderValue = selectedSymbol?.["min-order-value"] || 10;
+
+    let [accountBalanceUser1, accountBalanceUser2] = await Promise.all([
+      await getUserBalance(user1, 'sell'),
+      await getUserBalance(user2, "buy"),
+    ])
+
+    const maxAmountPerElement = Math.min(accountBalanceUser2, desiredAmount);
+    const totalVolume = (desiredAmount / minPrice);
+    if (accountBalanceUser1 < totalVolume) {
+      toast(`Your balance is insufficient to create ${desiredAmount} ${selectedSymbol?.["base-currency"]}`);
+      return;
+    }
+    const arrAmount = generateRandomArrayFromData({
+      desiredAmount, count, maxAmountPerElement, minOrderValue, minPrice, maxPrice, pricePrecision
+    })
+    console.log({ arrAmount })
     try {
-      for (let i = 0; i < count; i++) {
-        console.log({ i })
-        const maxAmount = Math.min(desiredAmount / count);
-        const minAmount = Math.max(desiredAmount / (count + 1));
+      let currentAmount = 0;
+      let lastVolume = 0;
+      let lastPrice = 0;
+      for await (const item of arrAmount) {
 
-        const amount1 = generateRandomPrice(minAmount, maxAmount, pricePrecision);
-        console.log({ amount1, minAmount, maxAmount })
-        if (amount1 < minOrderValue) {
-          break;
-        }
-
-        const price = generateRandomPrice(minPrice, maxPrice, pricePrecision);
-        const volume1 = +(amount1 / price).toFixed(volumePrecision);
-
-        currentAmount += amount1;
-        if (currentAmount >= desiredAmount) {
-          break;
-        }
+        const amount = +item.amount.toFixed(pricePrecision);
+        // const price = generateRandomPrice();
+        const volume = +(amount / item.price).toFixed(volumePrecision);
 
         // get coin account1 and get money account2
-        let [ accountBalanceUser1, accountBalanceUser2 ]  = await Promise.all([
+        [accountBalanceUser1, accountBalanceUser2] = await Promise.all([
           await getUserBalance(user1, 'sell'),
           await getUserBalance(user2, "buy"),
         ])
-        console.log({ accountBalanceUser1, accountBalanceUser2 })
-        if (accountBalanceUser1 < volume1 || accountBalanceUser2 < amount1) {
+        if (accountBalanceUser1 < volume || accountBalanceUser2 < amount) {
           break;
         }
 
         Promise.all([
-        // account1 sell
+          // account1 sell
           await _onSellOrderAsync({
             "account-id": user1?.userId,
-            price,
-            amount: volume1,
+            price: item.price,
+            amount: volume,
             symbol: selectedSymbol?.symbol ?? "",
             AccessKeyId: user1?.AccessKeyId,
             secretKey: user1?.secretKey,
@@ -582,73 +586,90 @@ const Home = () => {
           // account2 buy
           await _onBuyOrderAsync({
             "account-id": user2?.userId,
-            price,
-            amount: volume1,
+            price: item.price,
+            amount: volume,
             symbol: selectedSymbol?.symbol ?? "",
             AccessKeyId: user2?.AccessKeyId,
             secretKey: user2?.secretKey,
           }),
         ])
         await delay(2000);
-        
-        const [checkSellUser1, checkBuyUser2] = await Promise.all([
-          await retryCheckOpenOrders(user1, 5, 5),
-          await retryCheckOpenOrders(user2, 5, 5)
-        ])
-        if (!checkSellUser1 || !checkBuyUser2) {
-          break;
-        }
+
+        // const [checkSellUser1, checkBuyUser2] = await Promise.all([
+        //   await retryCheckOpenOrders(user1, 5, 5),
+        //   await retryCheckOpenOrders(user2, 5, 5)
+        // ])
+        // if (!checkSellUser1 || !checkBuyUser2) {
+        //   throw Error('Order is exists');
+        // }
 
         // ====================
         // ====================
 
-        const amount2 = Math.min(accountBalanceUser2, maxAmount);
-        const volume2 = +(amount2 / price).toFixed(volumePrecision);
-        console.log({ volume2, accountBalanceUser2, maxAmount });
-  
-        [ accountBalanceUser1, accountBalanceUser2 ]  = await Promise.all([
+        const volume2: number = +(volume * 90 / 100).toFixed(volumePrecision);
+        lastVolume += +(volume - volume2).toFixed(volumePrecision);
+        lastPrice += +(item.price).toFixed(pricePrecision);
+        [accountBalanceUser1, accountBalanceUser2] = await Promise.all([
           await getUserBalance(user1, 'buy'),
           await getUserBalance(user2, "sell"),
         ])
 
         // get coin account2
-        if (accountBalanceUser2 < volume2 || accountBalanceUser1 < amount2) {
-          break;
+        if (accountBalanceUser2 < volume || accountBalanceUser1 < amount) {
+          console.log({ accountBalanceUser2, accountBalanceUser1 })
+          throw Error('Data invalid');
         }
 
         Promise.all([
           // account1 sell
           await _onSellOrderAsync({
             "account-id": user2?.userId,
-            price,
-            amount: volume2,
+            price: item.price,
+            amount: volume,
             symbol: selectedSymbol?.symbol ?? "",
             AccessKeyId: user2?.AccessKeyId,
             secretKey: user2?.secretKey,
           }),
-           // account1 buy
+          // account1 buy
           await _onBuyOrderAsync({
             "account-id": user1?.userId,
-            price,
-            amount: volume2,
+            price: item.price,
+            amount: volume,
             symbol: selectedSymbol?.symbol ?? "",
             AccessKeyId: user1?.AccessKeyId,
             secretKey: user1?.secretKey,
           }),
         ])
-        // account2 sell
-
-        // const [checkSellUser2, checkBuyUser1] = await Promise.all([
-        //   await retryCheckOpenOrders(user1, 5, 5),
-        //   await retryCheckOpenOrders(user2, 5, 5)
-        // ])
-        // if (!checkSellUser2 || !checkBuyUser1) {
-        //   break;
-        // }
+        currentAmount += amount;
         toast(`Total volume: ${currentAmount.toFixed(4)}`);
       }
+      // if (lastVolume > 0 && lastPrice > 0) {
+      //   const avgPrice = +(lastPrice / count).toFixed(pricePrecision);
+      //   Promise.all([
+      //     // account1 sell
+      //     await _onSellOrderAsync({
+      //       "account-id": user2?.userId,
+      //       price: avgPrice,
+      //       amount: +lastVolume.toFixed(volumePrecision),
+      //       symbol: selectedSymbol?.symbol ?? "",
+      //       AccessKeyId: user2?.AccessKeyId,
+      //       secretKey: user2?.secretKey,
+      //     }),
+      //     // account1 buy
+      //     await _onBuyOrderAsync({
+      //       "account-id": user1?.userId,
+      //       price: avgPrice,
+      //       amount: +lastVolume.toFixed(volumePrecision),
+      //       symbol: selectedSymbol?.symbol ?? "",
+      //       AccessKeyId: user1?.AccessKeyId,
+      //       secretKey: user1?.secretKey,
+      //     }),
+      //   ])
+      // }
+      
       toast("Create volume successfully");
-    } catch (err) {
+    } catch (err: any) {
+      toast(err.message);
       const cancelUser1Order = API.cancelAllOrder({ userId: user1?.userId, symbol: selectedSymbol?.symbol ?? '', size: desiredAmount, side: 'sell', types: 'sell-limit', AccessKeyId: user1?.AccessKeyId ?? '', secretKey: user1?.secretKey ?? '' });
 
       const cancelUser2Order = API.cancelAllOrder({ userId: user2?.userId, symbol: selectedSymbol?.symbol ?? '', size: desiredAmount, side: 'sell', types: 'sell-limit', AccessKeyId: user2?.AccessKeyId ?? '', secretKey: user2?.secretKey ?? '' });

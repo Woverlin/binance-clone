@@ -36,36 +36,66 @@ export const generateRandomPrice = (minPrice: number, maxPrice: number, numDecim
   return floored_val(
     Math.random() * (maxPrice - (minPrice)) + minPrice,
     numDecimalDigits || 4,
-  ); 
+  );
 }
 
-const generateRandomArrayAmount = (totalAmount: number, elementCount: number, maxAmountPerElement: number) => {
+const generateRandomArrayAmount = (
+  totalAmount: number,
+  elementCount: number,
+  maxAmountPerElement: number,
+  minPrice: number,
+  maxPrice: number,
+  pricePrecision: number,
+  minOrderValue: number,
+) => {
   if (totalAmount <= 0 || elementCount <= 0 || maxAmountPerElement <= 0) {
-      return [];
+    return [];
   }
 
   const result = [];
   let remainingAmount = totalAmount;
 
   for (let i = 0; i < elementCount - 1; i++) {
-      const randomValue = Math.random() * Math.min(maxAmountPerElement, remainingAmount);
-      result.push(randomValue);
-      remainingAmount -= randomValue;
+    const price = generateRandomPrice(minPrice, maxPrice, pricePrecision);
+    let amount = Math.random() * Math.min(maxAmountPerElement, remainingAmount);
+    if (amount <= minOrderValue) {
+      amount = Math.random() * Math.min(maxAmountPerElement, remainingAmount);
+    }
+  
+    result.push({
+      amount,
+      price,
+    });
+    remainingAmount -= amount;
   }
 
-  result.push(remainingAmount);
+  const price = generateRandomPrice(minPrice, maxPrice, pricePrecision);
+  result.push({
+    amount: remainingAmount,
+    price,
+  });
 
-  return result.map(value => Math.min(value, maxAmountPerElement));
+  return result.map(value => ({
+    amount: Math.min(value.amount, maxAmountPerElement),
+    price: value.price
+  }));
 }
 
-const sumArray = (array: number[]) =>{
-  return array.reduce((sum, value) => sum + value, 0);
+const sumArray = (array: any[]) => {
+  return array.reduce((sum, value) => sum + value.amount, 0);
 }
 
 
-export const generateRandomArrayFromData = (totalAmount: number, elementCount: number, maxAmountPerElement: number) => {
+export const generateRandomArrayFromData = ({
+  desiredAmount, count, maxAmountPerElement, minOrderValue, minPrice, maxPrice, pricePrecision
+}: {
+  desiredAmount: number, count: number, maxAmountPerElement: number, minOrderValue: number, minPrice: number, maxPrice: number, pricePrecision: number
+}) => {
   let randomArray;
   do {
-    randomArray = generateRandomArrayAmount(totalAmount, elementCount, maxAmountPerElement);
-  } while (sumArray(randomArray) !== totalAmount);
+    randomArray = generateRandomArrayAmount(desiredAmount, count, maxAmountPerElement, minPrice, maxPrice, pricePrecision, minOrderValue);
+  } while (
+    sumArray(randomArray) !== desiredAmount
+  );
+  return randomArray;
 }
