@@ -39,3 +39,33 @@ export const generateRandomPrice = (minPrice: number, maxPrice: number, numDecim
   ); 
 }
 
+const generateRandomArrayAmount = (totalAmount: number, elementCount: number, maxAmountPerElement: number) => {
+  if (totalAmount <= 0 || elementCount <= 0 || maxAmountPerElement <= 0) {
+      return [];
+  }
+
+  const result = [];
+  let remainingAmount = totalAmount;
+
+  for (let i = 0; i < elementCount - 1; i++) {
+      const randomValue = Math.random() * Math.min(maxAmountPerElement, remainingAmount);
+      result.push(randomValue);
+      remainingAmount -= randomValue;
+  }
+
+  result.push(remainingAmount);
+
+  return result.map(value => Math.min(value, maxAmountPerElement));
+}
+
+const sumArray = (array: number[]) =>{
+  return array.reduce((sum, value) => sum + value, 0);
+}
+
+
+export const generateRandomArrayFromData = (totalAmount: number, elementCount: number, maxAmountPerElement: number) => {
+  let randomArray;
+  do {
+    randomArray = generateRandomArrayAmount(totalAmount, elementCount, maxAmountPerElement);
+  } while (sumArray(randomArray) !== totalAmount);
+}
