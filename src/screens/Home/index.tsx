@@ -545,7 +545,7 @@ const Home = () => {
     ])
 
     const maxAmountPerElement = Math.min(accountBalanceUser2, desiredAmount);
-    const totalVolume = (desiredAmount / minPrice);
+    const totalVolume = (desiredAmount/count/minPrice);
     if (accountBalanceUser1 < totalVolume) {
       toast(`Your balance is insufficient to create ${desiredAmount} ${selectedSymbol?.["base-currency"]}`);
       return;
